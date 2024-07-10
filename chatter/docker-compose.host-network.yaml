@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  talker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros2_talker
+    environment:
+      - ROS_DOMAIN_ID=8
+    command: /bin/bash -c "source /opt/ros/humble/setup.bash && echo 'Talker starting...' && ros2 run demo_nodes_cpp talker"
+    network_mode: host
+    ipc: host
+    pid: host
+
+  listener:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros2_listener
+    environment:
+      - ROS_DOMAIN_ID=8
+    command: /bin/bash -c "source /opt/ros/humble/setup.bash && echo 'Listener starting...' && ros2 run demo_nodes_cpp listener"
+    network_mode: host
+    ipc: host
+    pid: host
