@@ -11,7 +11,7 @@ services:
     command: /bin/bash -c "source /opt/ros/humble/setup.bash && echo 'Talker starting...' && ros2 run demo_nodes_cpp talker"
     network_mode: host
     ipc: host
-    pid: host
+    # pid: host -> may not be necessary, and breaks some /dev device access
 
   listener:
     build:
@@ -23,4 +23,4 @@ services:
     command: /bin/bash -c "source /opt/ros/humble/setup.bash && echo 'Listener starting...' && ros2 run demo_nodes_cpp listener"
     network_mode: host
     ipc: host
-    pid: host
+    # pid: host
