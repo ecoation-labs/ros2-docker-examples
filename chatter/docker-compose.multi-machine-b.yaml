@@ -1,0 +1,23 @@
+services:
+  listener:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros2_listener
+    command: /bin/bash -c "source /opt/ros/humble/setup.bash && ros2 run demo_nodes_cpp listener"
+    environment:
+      - ROS_DISCOVERY_SERVER=192.168.98.10:11811
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/fastdds_discovery_server.xml
+      - ROS_DOMAIN_ID=0
+    volumes:
+      - ./fastdds_discovery_server.xml:/fastdds_discovery_server.xml
+    ports:
+      - "7400:7400/udp"
+      - "7401:7401/udp"
+      - "7402:7402/udp"
+    networks:
+      - ros_net
+
+networks:
+  ros_net:
+    driver: bridge

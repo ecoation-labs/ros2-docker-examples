@@ -1,6 +1,6 @@
 # ROS 2 Chatter Example with Docker Compose
 
-This repository contains a Docker Compose setup for running a ROS 2 Humble chatter example with two containers: one for the talker and one for the listener. The setup ensures proper communication between the ROS 2 nodes using the host network, IPC, and PID namespaces.
+This repository contains a Docker Compose setup for running a ROS 2 Humble chatter example with three containers: a Discovery Server, talker, and listener. The setup demonstrates both multicast-based and Discovery Server-based communication methods.
 
 ## Prerequisites
 
@@ -10,72 +10,103 @@ This repository contains a Docker Compose setup for running a ROS 2 Humble chatt
 ## Files
 
 - `Dockerfile`: Builds a Docker image with the `demo_nodes_cpp` package installed.
-- `docker-compose.host-network.yaml`: Docker Compose file to run the ROS 2 talker and listener with the necessary configurations.
+- `docker-compose.host-network.yaml`: Docker Compose file using host network mode (multicast-based discovery)
+- `docker-compose.discovery.yaml`: Docker Compose file using Discovery Server (unicast-based discovery)
+- `fastdds_discovery_server.xml`: Configuration file for Fast-DDS Discovery Server settings
+
+## Discovery Server Setup
+
+The repository provides two different approaches for ROS 2 node discovery:
+
+### 1. Host Network Mode (Simple Discovery Protocol)
+Uses multicast for node discovery. All containers share the host's network stack, enabling automatic discovery through multicast packets.
+
+### 2. Discovery Server Mode
+Uses a centralized Discovery Server for node discovery, eliminating the need for multicast. This is particularly useful when:
+- Multicast is not available or reliable
+- Network isolation is required
+- Working across different networks or cloud environments
+
+#### Key Components:
+
+1. **Discovery Server Container**:
+   - Acts as a central registry for ROS 2 nodes
+   - Runs on port 11811 (UDP)
+   - Generates a unique GUID prefix (visible in logs)
+   - Example: `fastdds discovery --server-id 0`
+
+2. **Client Nodes (Talker/Listener)**:
+   - Connect to Discovery Server using its address and port
+   - Can be configured as either:
+     - `CLIENT`: Only communicates through the server
+     - `SUPER_CLIENT`: Can establish direct connections after discovery
+
+3. **Network Configuration**:
+   - Each service can run on isolated networks
+   - All services need access to Discovery Server port (11811)
+   - DDS communication ports (7400-7402) for data exchange
+
+#### Fast-DDS XML Configuration:
+```xml
+<discoveryProtocol>CLIENT</discoveryProtocol>
+<!-- or -->
+<discoveryProtocol>SUPER_CLIENT</discoveryProtocol>
+
+<!-- Server identification -->
+<RemoteServer prefix="44.53.00.5f.45.50.52.4f.53.49.4d.41">
+    <!-- Default eProsima Discovery Server GUID -->
+```
 
 ## Usage
 
-1. **Build and run the containers**:
+1. **Using Host Network (Multicast)**:
     ```bash
     docker-compose -f docker-compose.host-network.yaml up --build
     ```
 
-2. **Verify the ROS 2 nodes and topics**:
+2. **Using Discovery Server (Unicast)**:
+    ```bash
+    docker-compose -f docker-compose.discovery.yaml up --build
+    ```
 
-    - **In the talker container**:
-        ```bash
-        docker exec -it ros2_talker /bin/bash
-        source /opt/ros/humble/setup.bash
-        ros2 node list
-        ros2 topic list
-        ```
+## Discovery Server vs Host Network
 
-    - **In the listener container**:
-        ```bash
-        docker exec -it ros2_listener /bin/bash
-        source /opt/ros/humble/setup.bash
-        ros2 node list
-        ros2 topic list
-        ```
+### Discovery Server Advantages:
+- Works without multicast support
+- Better network isolation
+- More control over discovery process
+- Suitable for cloud deployments
+- Can work across different networks
 
-3. **Check communication between the nodes**:
+### Host Network Advantages:
+- Simpler setup
+- Lower latency
+- No single point of failure
+- Automatic peer discovery
+- Better for local development
 
-    - **Publish a message from the talker**:
-        ```bash
-        docker exec -it ros2_talker /bin/bash
-        source /opt/ros/humble/setup.bash
-        ros2 topic pub /chatter std_msgs/String "data: 'Hello, world!'"
-        ```
+## Troubleshooting
 
-    - **Echo the message in the listener**:
-        ```bash
-        docker exec -it ros2_listener /bin/bash
-        source /opt/ros/humble/setup.bash
-        ros2 topic echo /chatter
-        ```
+1. **Verify Discovery Server:**
+   ```bash
+   docker logs ros2_discovery_server
+   # Look for GUID prefix and server status
+   ```
 
-## Explanation
+2. **Check Client Connectivity:**
+   ```bash
+   docker exec -it ros2_talker ros2 node list
+   docker exec -it ros2_listener ros2 node list
+   ```
 
-### Network Mode: Host
-
-- **Shared Network Namespace**: Using `network_mode: host` allows the container to share the host's network namespace. This means the container can use the host's IP address and network interfaces directly, which is essential for ROS 2 nodes to communicate over the network as if they were running on the host machine.
-
-### IPC Mode: Host
-
-- **Shared IPC Namespace**: The `ipc: host` option enables the container to share the host's IPC namespace. ROS 2 and its underlying DDS implementation use IPC mechanisms like shared memory and semaphores for efficient inter-process communication. Sharing the IPC namespace ensures nodes in different containers can communicate using these mechanisms.
-
-### PID Mode: Host
-
-- **Shared PID Namespace**: The `pid: host` option allows the container to share the host's PID namespace. This means processes inside the container can see and interact with processes on the host. Some ROS 2 features rely on PID-based identification and management of processes, making this option necessary.
-
-### Why These Options Matter for ROS 2
-
-- **Node and Service Discovery**: ROS 2 relies on the Data Distribution Service (DDS) for node and service discovery. DDS implementations (like Fast DDS) often use shared memory and other IPC mechanisms to optimize communication. When running in isolated namespaces, the discovery process can fail because the nodes cannot see each other’s IPC resources.
-- **Process Coordination**: Some functionalities in ROS 2 might rely on being able to see or signal other processes, which requires a shared PID namespace.
-
-### Summary
-
-By setting `network_mode: host`, `ipc: host`, and `pid: host`, you ensure that ROS 2 nodes in different containers can effectively discover and communicate with each other using shared network, IPC, and PID namespaces. This setup mimics running all nodes on the same physical machine, removing the isolation that Docker typically imposes.
+3. **Common Issues:**
+   - Incorrect GUID prefix in XML configuration
+   - Port 11811 not accessible
+   - Network isolation preventing discovery
+   - XML configuration parsing errors
 
 ## References
 
-- https://github.com/rosblox/ros-template
+- [ROS 2 Discovery Server Documentation](https://docs.ros.org/en/humble/Tutorials/Advanced/Discovery-Server/Discovery-Server.html)
+- [Fast-DDS Discovery Server](https://fast-dds.docs.eprosima.com/en/latest/fastdds/discovery/discovery_server.html)
+- [ROS 2 Network Configuration](https://docs.ros.org/en/humble/Concepts/About-Different-Middleware-Vendors.html)

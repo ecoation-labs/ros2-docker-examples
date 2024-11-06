@@ -1,0 +1,36 @@
+services:
+  discovery-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros2_discovery_server
+    command: /bin/bash -c "source /opt/ros/humble/setup.bash && fastdds discovery --server-id 0"
+    ports:
+      - "11811:11811/udp"
+    networks:
+      - ros_net
+
+  talker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros2_talker
+    command: /bin/bash -c "source /opt/ros/humble/setup.bash && ros2 run demo_nodes_cpp talker"
+    environment:
+      - ROS_DISCOVERY_SERVER=192.168.98.10:11811
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/fastdds_discovery_server.xml
+      - ROS_DOMAIN_ID=0
+    volumes:
+      - ./fastdds_discovery_server.xml:/fastdds_discovery_server.xml
+    ports:
+      - "7400:7400/udp"
+      - "7401:7401/udp"
+      - "7402:7402/udp"
+    networks:
+      - ros_net
+    depends_on:
+      - discovery-server
+
+networks:
+  ros_net:
+    driver: bridge

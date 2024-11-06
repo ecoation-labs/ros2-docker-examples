@@ -1,0 +1,67 @@
+services:
+  discovery-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros2_discovery_server
+    command: /bin/bash -c "source /opt/ros/humble/setup.bash && fastdds discovery --server-id 0"
+    ports:
+      - "11811:11811/udp"
+    networks:
+      discovery_net:
+        aliases:
+          - discovery-server
+
+  talker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros2_talker
+    command: /bin/bash -c "source /opt/ros/humble/setup.bash && ros2 run demo_nodes_cpp talker"
+    environment:
+      - ROS_DISCOVERY_SERVER=discovery-server:11811
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/fastdds_discovery_server.xml
+      - ROS_DOMAIN_ID=0
+    volumes:
+      - ./fastdds_discovery_server.xml:/fastdds_discovery_server.xml
+    depends_on:
+      - discovery-server
+    networks:
+      - discovery_net
+      - talker_net
+    ports:
+      # - "7400:7400/udp"  # Meta-traffic
+      # - "7401:7401/udp"  # User-traffic
+      # - "7402:7402/udp"  # Additional DDS ports
+      - "11812:11811/udp"  # Discovery Server port
+
+  listener:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros2_listener
+    command: /bin/bash -c "source /opt/ros/humble/setup.bash && ros2 run demo_nodes_cpp listener"
+    environment:
+      - ROS_DISCOVERY_SERVER=discovery-server:11811
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/fastdds_discovery_server.xml
+      - ROS_DOMAIN_ID=0
+    volumes:
+      - ./fastdds_discovery_server.xml:/fastdds_discovery_server.xml
+    depends_on:
+      - discovery-server
+    networks:
+      - discovery_net
+      - listener_net
+    ports:
+      # - "7410:7400/udp"  # Meta-traffic (mapped to different host port)
+      # - "7411:7401/udp"  # User-traffic (mapped to different host port)
+      # - "7412:7402/udp"  # Additional DDS ports (mapped to different host port)
+      - "11813:11811/udp"  # Discovery Server port
+
+networks:
+  discovery_net:
+    driver: bridge
+  talker_net:
+    driver: bridge
+  listener_net:
+    driver: bridge
